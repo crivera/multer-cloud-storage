@@ -1,13 +1,19 @@
-import multer = require('multer');
-import { Bucket, CreateWriteStreamOptions, PredefinedAcl, Storage, StorageOptions } from '@google-cloud/storage';
-import { v4 as uuid } from 'uuid';
-import urlencode = require('urlencode');
-import { Request } from 'express';
+import multer = require("multer");
+import {
+  Bucket,
+  CreateWriteStreamOptions,
+  PredefinedAcl,
+  Storage,
+  StorageOptions,
+} from "@google-cloud/storage";
+import { v4 as uuid } from "uuid";
+import urlencode = require("urlencode");
+import { Request } from "express";
 
 type GoogleCloudBlobFileReference = {
-	destination?: string, 
-	filename: string
-}
+  destination?: string;
+  filename: string;
+};
 
 export type MulterGoogleCloudStorageOptions = {
   acl?: PredefinedAcl;
@@ -20,167 +26,188 @@ export type MulterGoogleCloudStorageOptions = {
 };
 
 export default class MulterGoogleCloudStorage implements multer.StorageEngine {
+  private gcsBucket: Bucket;
+  private gcsStorage: Storage;
+  private options: StorageOptions & MulterGoogleCloudStorageOptions;
+  //private blobFile: {destination?: string, filename: string} = { destination: '', filename: '' };
 
-	private gcsBucket: Bucket;
-	private gcsStorage: Storage;
-	private options: StorageOptions & MulterGoogleCloudStorageOptions;
-	//private blobFile: {destination?: string, filename: string} = { destination: '', filename: '' };
-		
-	getFilename( req, file, cb ) {
-		if(typeof file.originalname === 'string')
-			cb( null, file.originalname );
-		else
-			cb( null, `${uuid()}` );
-	}
+  getFilename(req, file, cb) {
+    if (typeof file.originalname === "string") cb(null, file.originalname);
+    else cb(null, `${uuid()}`);
+  }
 
-	getDestination( req, file, cb ) {
-		cb( null, '' );
-	}
-	
-	getContentType( req, file ) {
-		if(typeof file.mimetype === 'string')
-			return file.mimetype;
-		else
-			return undefined;
-	}
+  getDestination(req, file, cb) {
+    cb(null, "");
+  }
 
-	private getBlobFileReference( req, file ): GoogleCloudBlobFileReference | false {
-		const blobFile: GoogleCloudBlobFileReference = {
-			destination: '',
-			filename: '',
-		};
+  getContentType(req, file) {
+    if (typeof file.mimetype === "string") return file.mimetype;
+    else return undefined;
+  }
 
-		this.getDestination(req, file, (err, destination) => {
-			if (err) {
-				return false;
-			}
+  private getBlobFileReference(
+    req,
+    file
+  ): GoogleCloudBlobFileReference | false {
+    const blobFile: GoogleCloudBlobFileReference = {
+      destination: "",
+      filename: "",
+    };
 
-			var escDestination = '';
-			escDestination += destination
-				.replace(/^\.+/g, '')
-				.replace(/^\/+|\/+$/g, '');
+    this.getDestination(req, file, (err, destination) => {
+      if (err) {
+        return false;
+      }
 
-			if (escDestination !== '') {
-				escDestination = escDestination + '/';
-			}
-			
-			blobFile.destination = escDestination;
-		});
-		
-		this.getFilename(req, file, (err, filename) => {
-			if (err) {
-				return false;
-			}
+      var escDestination = "";
+      escDestination += destination
+        .replace(/^\.+/g, "")
+        .replace(/^\/+|\/+$/g, "");
 
-			blobFile.filename = urlencode(filename
-				.replace(/^\.+/g, '')
-				.replace(/^\/+/g, '')
-				.replace(/\r|\n/g, '_')
-			);
-		});
+      if (escDestination !== "") {
+        escDestination = escDestination + "/";
+      }
 
-		return blobFile;
-	}
+      blobFile.destination = escDestination;
+    });
 
-	constructor(opts?: StorageOptions & MulterGoogleCloudStorageOptions) {
-		opts = opts || {};
+    this.getFilename(req, file, (err, filename) => {
+      if (err) {
+        return false;
+      }
 
-		typeof opts.destination === 'string' ? 
-			this.getDestination = function (req, file, cb) { cb(null, opts.destination) } 
-			: this.getDestination = opts.destination || this.getDestination;
-		
-		if (opts.hideFilename) {
-			this.getFilename = function (req, file, cb) { cb(null, `${uuid()}`) };
-			this.getContentType = function (req, file) { return undefined };
-		}
-		else {
-			typeof opts.filename === 'string' ?
-				this.getFilename = function (req, file, cb) { cb(null, opts.filename) }
-				:	this.getFilename = opts.filename || this.getFilename;
-			
-			typeof opts.contentType === 'string' ?
-				this.getContentType = function (req, file) { return opts.contentType }
-				:	this.getContentType = opts.contentType || this.getContentType;
-		}
+      blobFile.filename = urlencode(
+        filename
+          .replace(/^\.+/g, "")
+          .replace(/^\/+/g, "")
+          .replace(/\r|\n/g, "_")
+      );
+    });
 
-		opts.bucket = opts.bucket || process.env.GCS_BUCKET || null;
-		opts.projectId = opts.projectId || process.env.GCLOUD_PROJECT || null;
-		opts.keyFilename = opts.keyFilename || process.env.GCS_KEYFILE || null;
+    return blobFile;
+  }
 
-		if (!opts.bucket) {
-			throw new Error('You have to specify bucket for Google Cloud Storage to work.');
-		}
+  constructor(opts?: StorageOptions & MulterGoogleCloudStorageOptions) {
+    opts = opts || {};
 
-		if (!opts.projectId) {
-			throw new Error('You have to specify project id for Google Cloud Storage to work.');
-		}
+    typeof opts.destination === "string"
+      ? (this.getDestination = function (req, file, cb) {
+          cb(null, opts.destination);
+        })
+      : (this.getDestination = opts.destination || this.getDestination);
 
-		if (!opts.keyFilename && !opts.credentials) {
-			throw new Error('You have to specify credentials key file or credentials object, for Google Cloud Storage to work.');
-		}
+    if (opts.hideFilename) {
+      this.getFilename = function (req, file, cb) {
+        cb(null, `${uuid()}`);
+      };
+      this.getContentType = function (req, file) {
+        return undefined;
+      };
+    } else {
+      typeof opts.filename === "string"
+        ? (this.getFilename = function (req, file, cb) {
+            cb(null, opts.filename);
+          })
+        : (this.getFilename = opts.filename || this.getFilename);
 
-		this.gcsStorage = new Storage({
-			projectId: opts.projectId,
-			keyFilename: opts.keyFilename,
-			credentials: opts.credentials
-		});
+      typeof opts.contentType === "string"
+        ? (this.getContentType = function (req, file) {
+            return opts.contentType;
+          })
+        : (this.getContentType = opts.contentType || this.getContentType);
+    }
 
-		this.gcsBucket = this.gcsStorage.bucket(opts.bucket);
+    opts.bucket = opts.bucket || process.env.GCS_BUCKET || null;
+    opts.projectId = opts.projectId || process.env.GCLOUD_PROJECT || null;
+    opts.keyFilename = opts.keyFilename || process.env.GCS_KEYFILE || null;
 
-		this.options = opts;
-	}
+    if (!opts.bucket) {
+      throw new Error(
+        "You have to specify bucket for Google Cloud Storage to work."
+      );
+    }
 
-	_handleFile = (req, file, cb) => {
-		const blobFile = this.getBlobFileReference( req, file );
-		if(blobFile !== false) {
-			var blobName = blobFile.destination + blobFile.filename;
-			var blob = this.gcsBucket.file(blobName);
+    if (!opts.projectId) {
+      throw new Error(
+        "You have to specify project id for Google Cloud Storage to work."
+      );
+    }
 
-			const streamOpts: CreateWriteStreamOptions = {};
+    if (!opts.keyFilename && !opts.credentials) {
+      throw new Error(
+        "You have to specify credentials key file or credentials object, for Google Cloud Storage to work."
+      );
+    }
 
-			if (!this.options.uniformBucketLevelAccess) {
-				streamOpts.predefinedAcl = this.options.acl || 'private'
-			}
+    this.gcsStorage = new Storage({
+      projectId: opts.projectId,
+      keyFilename: opts.keyFilename,
+      credentials: opts.credentials,
+      apiEndpoint: opts.apiEndpoint,
+    });
 
-			const contentType = this.getContentType(req, file);
-			if (contentType) {
-				streamOpts.metadata = {contentType};
-			}
+    this.gcsBucket = this.gcsStorage.bucket(opts.bucket);
 
-			const blobStream = blob.createWriteStream(streamOpts);
-			file.stream.pipe(blobStream)
-				.on('error', (err) => cb(err))
-				.on('finish', (file) => {
-					const name = blob.metadata.name;
-					const filename = name.substr(name.lastIndexOf('/')+1);
-					cb(null, {
-						bucket: blob.metadata.bucket,
-						destination: blobFile.destination,
-						filename,
-						path: `${blobFile.destination}${filename}`,
-						contentType: blob.metadata.contentType,
-						size: blob.metadata.size,
-						uri: `gs://${blob.metadata.bucket}/${blobFile.destination}${filename}`,
-						linkUrl: `https://storage.googleapis.com/${blob.metadata.bucket}/${blobFile.destination}${filename}`,
-						selfLink: blob.metadata.selfLink,
-						//metadata: blob.metadata
-					})
-				});
-		}
-	}
-	_removeFile =  (req, file, cb) => {
-		const blobFile = this.getBlobFileReference( req, file );
-		if(blobFile !== false) {
-			var blobName = blobFile.destination + blobFile.filename;
-			var blob = this.gcsBucket.file(blobName);
-			blob.delete();
-			cb();
-		}
-	};
+    this.options = opts;
+  }
+
+  _handleFile = (req, file, cb) => {
+    const blobFile = this.getBlobFileReference(req, file);
+    if (blobFile !== false) {
+      var blobName = blobFile.destination + blobFile.filename;
+      var blob = this.gcsBucket.file(blobName);
+
+      const streamOpts: CreateWriteStreamOptions = {};
+
+      if (!this.options.uniformBucketLevelAccess) {
+        streamOpts.predefinedAcl = this.options.acl || "private";
+      }
+
+      const contentType = this.getContentType(req, file);
+      if (contentType) {
+        streamOpts.metadata = { contentType };
+      }
+
+      const blobStream = blob.createWriteStream(streamOpts);
+      file.stream
+        .pipe(blobStream)
+        .on("error", (err) => cb(err))
+        .on("finish", (file) => {
+          const name = blob.metadata.name;
+          const filename = name.substr(name.lastIndexOf("/") + 1);
+          cb(null, {
+            bucket: blob.metadata.bucket,
+            destination: blobFile.destination,
+            filename,
+            path: `${blobFile.destination}${filename}`,
+            contentType: blob.metadata.contentType,
+            size: blob.metadata.size,
+            uri: `gs://${blob.metadata.bucket}/${blobFile.destination}${filename}`,
+            linkUrl: `https://storage.googleapis.com/${blob.metadata.bucket}/${blobFile.destination}${filename}`,
+            selfLink: blob.metadata.selfLink,
+            //metadata: blob.metadata
+          });
+        });
+    }
+  };
+  _removeFile = (req, file, cb) => {
+    const blobFile = this.getBlobFileReference(req, file);
+    if (blobFile !== false) {
+      var blobName = blobFile.destination + blobFile.filename;
+      var blob = this.gcsBucket.file(blobName);
+      blob.delete();
+      cb();
+    }
+  };
 }
 
-export function storageEngine(opts?: StorageOptions & MulterGoogleCloudStorageOptions) {
-	return new MulterGoogleCloudStorage(opts);
+export function storageEngine(
+  opts?: StorageOptions & MulterGoogleCloudStorageOptions
+) {
+  return new MulterGoogleCloudStorage(opts);
 }
 
-export type ContentTypeFunction = (req: Request, file: Express.Multer.File) => string | undefined;
+export type ContentTypeFunction = (
+  req: Request,
+  file: Express.Multer.File
+) => string | undefined;

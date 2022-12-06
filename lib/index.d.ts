@@ -1,7 +1,7 @@
-import multer = require('multer');
-import { PredefinedAcl, StorageOptions } from '@google-cloud/storage';
-import { Request } from 'express';
-export declare type MulterGoogleCloudStorageOptions = {
+import multer = require("multer");
+import { PredefinedAcl, StorageOptions } from "@google-cloud/storage";
+import { Request } from "express";
+export type MulterGoogleCloudStorageOptions = {
     acl?: PredefinedAcl;
     bucket?: string;
     contentType?: ContentTypeFunction | string;
@@ -23,4 +23,4 @@ export default class MulterGoogleCloudStorage implements multer.StorageEngine {
     _removeFile: (req: any, file: any, cb: any) => void;
 }
 export declare function storageEngine(opts?: StorageOptions & MulterGoogleCloudStorageOptions): MulterGoogleCloudStorage;
-export declare type ContentTypeFunction = (req: Request, file: Express.Multer.File) => string | undefined;
+export type ContentTypeFunction = (req: Request, file: Express.Multer.File) => string | undefined;
