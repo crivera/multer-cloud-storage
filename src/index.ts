@@ -96,10 +96,19 @@ export default class MulterGoogleCloudStorage implements multer.StorageEngine {
         })
       : (this.getDestination = opts.destination || this.getDestination);
 
-		/*
-		* If credentials and keyfile are not defined, Google Storage should appropriately be able to locate the
-		* default credentials for the environment see: https://cloud.google.com/docs/authentication/application-default-credentials#search_order
-		*/
+    if (opts.hideFilename) {
+      this.getFilename = function (req, file, cb) {
+        cb(null, `${uuid()}`);
+      };
+      this.getContentType = function (req, file) {
+        return undefined;
+      };
+    } else {
+      typeof opts.filename === "string"
+        ? (this.getFilename = function (req, file, cb) {
+            cb(null, opts.filename);
+          })
+        : (this.getFilename = opts.filename || this.getFilename);
 
       typeof opts.contentType === "string"
         ? (this.getContentType = function (req, file) {
@@ -124,12 +133,10 @@ export default class MulterGoogleCloudStorage implements multer.StorageEngine {
       );
     }
 
-    if (!opts.keyFilename && !opts.credentials) {
-      throw new Error(
-        "You have to specify credentials key file or credentials object, for Google Cloud Storage to work."
-      );
-    }
-
+    /*
+     * If credentials and keyfile are not defined, Google Storage should appropriately be able to locate the
+     * default credentials for the environment see: https://cloud.google.com/docs/authentication/application-default-credentials#search_order
+     */
     this.gcsStorage = new Storage({
       projectId: opts.projectId,
       keyFilename: opts.keyFilename,
